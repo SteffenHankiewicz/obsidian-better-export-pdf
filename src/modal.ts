@@ -263,7 +263,13 @@ export class ExportConfigModal extends Modal {
       await this.plugin.saveSettings();
 
       if (this.completed) {
-        const outputFile = await getOutputFile(title);
+
+				// intranda patch - Start
+        const outputFile = this.app.vault.adapter.basePath + "/" + this.file.parent.path + "/" + this.file.basename + ".pdf"
+        //const outputFile = await getOutputFile(this.file);
+        //new import_obsidian2.Notice(outputFile);
+        // intranda patch - End
+				
         if (outputFile) {
           await exportToPDF(
             outputFile,
