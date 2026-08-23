@@ -225,7 +225,7 @@
           src="app://obsidian.md/help.html"
           nodeintegration={true}
           class="print-preview-container"
-          style="--modal-scale: {scale};"
+          style="--modal-scale: {scale};display:flex;height:100%;"
           use:initWebviewEvents={item}
         ></webview>
       </div>
