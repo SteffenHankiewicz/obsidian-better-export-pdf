@@ -1,6 +1,6 @@
 import electron, { type WebviewTag } from "electron";
 const fs = require("fs").promises;
-import { type FrontMatterCache } from "obsidian";
+import { Notice, type FrontMatterCache } from "obsidian";
 import { PDFArray, PDFDict, PDFDocument, PDFHexString, PDFName, PDFRef, StandardFonts } from "pdf-lib";
 
 import type { BetterExportPdfPluginSettings } from "./main";
@@ -450,6 +450,22 @@ export function makePrintOptions(
   return printOptions;
 }
 
+export async function writePdfFile(outputFile: string, data: Buffer | Uint8Array): Promise<boolean> {
+  try {
+    await fs.writeFile(outputFile, data);
+    return true;
+  } catch (error: any) {
+    console.error(error);
+    const code = error?.code as string | undefined;
+    if (code === "EBUSY" || code === "EPERM" || code === "EACCES") {
+      new Notice("无法覆盖 PDF：文件可能正在被其他程序打开，请关闭后重试。");
+    } else {
+      new Notice(`保存 PDF 失败：${error?.message ?? error}`);
+    }
+    return false;
+  }
+}
+
 export async function exportToPDF(
   outputFile: string,
   config: ExportConfigType & BetterExportPdfPluginSettings,
@@ -470,7 +486,10 @@ export async function exportToPDF(
       maxLevel: safeParseInt(config?.maxLevel, 6),
     });
 
-    await fs.writeFile(outputFile, data);
+    const saved = await writePdfFile(outputFile, data);
+    if (!saved) {
+      return;
+    }
 
     if (config.open) {
       // @ts-ignore
@@ -478,6 +497,7 @@ export async function exportToPDF(
     }
   } catch (error) {
     console.error(error);
+    new Notice(`导出 PDF 失败：${(error as Error)?.message ?? error}`);
   }
 }
 

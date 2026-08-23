@@ -2,7 +2,7 @@
   import { onDestroy, onMount } from "svelte";
   import type BetterExportPdfPlugin from "../main";
   import type { ExportConfigType, ExportConfigModal, DocType, FileListType, DocV2Type } from "../modal";
-  import { TFile } from "obsidian";
+  import { Notice, TFile } from "obsidian";
   import { fixDocV2, printToPdf, renderMarkdownV2 } from "../render";
   import * as electron from "electron";
   import { getHeadingTree, safeParseInt } from "../utils";
@@ -12,7 +12,7 @@
   import { loadPdfJs } from "obsidian";
   import * as os from "os";
   import * as path from "path";
-  import { editPDF, getOutputFile, getOutputPath, makePrintOptions } from "../pdf";
+  import { editPDF, getOutputFile, getOutputPath, makePrintOptions, writePdfFile } from "../pdf";
   import Switch from "./Switch.svelte";
   import { Mutex } from "../utils/mutex";
   import { initRenderStates, completeRenderState, type RenderState } from "../utils/renderStates";
@@ -157,11 +157,22 @@
       filepath: outputFile,
     };
 
-    await mutex.run(async () => {
-      // 防止标题污染, 同一时间只有一个PDF被渲染
-      document.title = title;
-      await printToPdf(el, pdfOptions);
-    });
+    try {
+      await mutex.run(async () => {
+        // 防止标题污染, 同一时间只有一个PDF被渲染
+        document.title = title;
+        await printToPdf(el, pdfOptions);
+      });
+    } catch (error: any) {
+      console.error(error);
+      const code = error?.code as string | undefined;
+      if (code === "EBUSY" || code === "EPERM" || code === "EACCES") {
+        new Notice("无法覆盖 PDF：文件可能正在被其他程序打开，请关闭后重试。");
+      } else {
+        new Notice(`导出 PDF 失败：${error?.message ?? error}`);
+      }
+      return;
+    }
     if (onlyPreview) {
       return;
     }
@@ -175,7 +186,10 @@
       maxLevel: safeParseInt(settings?.maxLevel, 6),
     });
 
-    await fs.writeFile(outputFile, data);
+    const saved = await writePdfFile(outputFile, data);
+    if (!saved) {
+      return;
+    }
     if (config.open) {
       // @ts-ignore
       electron.remote.shell.openPath(outputFile);
